@@ -58,7 +58,7 @@ class Brain:
         self.chat_history: list[dict] = []
 
     def _build_history(self, max_entries: int = 20) -> list:
-        """Convert internal chat_history to google-genai Content objects."""
+        """Convert internal chat_history to google-genai Content list for chat history."""
         result = []
         for entry in self.chat_history[-max_entries:]:
             role = entry["role"]
@@ -67,18 +67,22 @@ class Brain:
             result.append(types.Content(role=role, parts=[types.Part(text=entry["text"])]))
         return result
 
+    def _get_chat(self, max_entries: int = 20):
+        """Get a chat instance with history already loaded."""
+        history = self._build_history(max_entries)
+        chat = self.client.chats.create(model=self.model_name, history=history)
+        return chat
+
     def plan_action(self, user_input: str) -> dict:
         """Get Gemini's plan as a JSON tool-call dict, or chat response."""
-        history = self._build_history()
+        chat = self._get_chat()
 
         prompt = f"USER REQUEST: {user_input}\n\nDecide if this requires tool calls or is just conversation. If action needed, respond with JSON only."
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
+        response = chat.send_message(
+            prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                history=history,
             ),
         )
         text = response.text.strip()
@@ -104,14 +108,12 @@ class Brain:
 
     def chat_response(self, message: str) -> str:
         """Conversational response with history."""
-        history = self._build_history()
+        chat = self._get_chat()
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=message,
+        response = chat.send_message(
+            message,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                history=history,
             ),
         )
         reply = response.text.strip()
