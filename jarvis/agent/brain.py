@@ -57,30 +57,23 @@ class Brain:
         # Internal history: list of {"role": "user"|"model", "text": "..."}
         self.chat_history: list[dict] = []
 
-    def _build_history(self, max_entries: int = 20) -> list:
-        """Convert internal chat_history to google-genai Content list for chat history."""
-        result = []
+    def _format_history(self, max_entries: int = 20) -> str:
+        """Format recent chat history as a readable conversation."""
+        lines = []
         for entry in self.chat_history[-max_entries:]:
-            role = entry["role"]
-            if role == "assistant":
-                role = "model"
-            result.append(types.Content(role=role, parts=[types.Part(text=entry["text"])]))
-        return result
-
-    def _get_chat(self, max_entries: int = 20):
-        """Get a chat instance with history already loaded."""
-        history = self._build_history(max_entries)
-        chat = self.client.chats.create(model=self.model_name, history=history)
-        return chat
+            role = "JARVIS" if entry["role"] == "assistant" else "USER"
+            lines.append(f"{role}: {entry['text']}")
+        return "\n".join(lines)
 
     def plan_action(self, user_input: str) -> dict:
         """Get Gemini's plan as a JSON tool-call dict, or chat response."""
-        chat = self._get_chat()
+        history_text = self._format_history()
+        context = f"{history_text}\n\n" if history_text else ""
+        prompt = f"{context}CURRENT USER REQUEST: {user_input}\n\nDecide if this requires tool calls or is just conversation. If action needed, respond with JSON only."
 
-        prompt = f"USER REQUEST: {user_input}\n\nDecide if this requires tool calls or is just conversation. If action needed, respond with JSON only."
-
-        response = chat.send_message(
-            prompt,
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
             ),
@@ -108,10 +101,12 @@ class Brain:
 
     def chat_response(self, message: str) -> str:
         """Conversational response with history."""
-        chat = self._get_chat()
+        history_text = self._format_history()
+        context = f"{history_text}\n\n" if history_text else ""
 
-        response = chat.send_message(
-            message,
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=f"{context}USER: {message}",
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
             ),
