@@ -1,0 +1,17 @@
+# Images
+*.png
+
+# Database
+*.db
+
+# Claude & planning
+.claude/
+.planning/
+
+# Virtual environment
+.venv/
+__pycache__/
+*.pyc
+.env
+*.log
+.vscode/
